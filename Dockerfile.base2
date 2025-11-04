@@ -1,0 +1,10 @@
+# 基于 base1 镜像
+FROM oh-my-arch:base1
+
+
+
+# 暴露 SSH 端口
+EXPOSE 22
+
+# 启动 SSH 服务
+CMD ["/usr/sbin/sshd", "-D"]

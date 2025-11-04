@@ -1,0 +1,81 @@
+# 使用 Arch Linux 作为基础镜像
+FROM archlinux:latest
+
+# 启用 multilib 仓库（永久支持 32 位库）
+RUN sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
+
+# 更新包管理器缓存并安装所有系统包（合并以利用缓存）
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+    openssh sudo base-devel git go curl fish \
+    wqy-microhei wqy-zenhei noto-fonts-cjk \
+    adobe-source-han-sans-cn-fonts adobe-source-han-serif-cn-fonts && \
+    pacman -Scc --noconfirm
+
+# 系统配置函数（fish 安装后定义并调用）
+RUN mkdir -p /etc/fish/conf.d && \
+    cat <<'EOF' > /etc/fish/conf.d/configure_system.fish
+function configure_system --description 'Configure hostname, locale, and primary user' -a username password hostname
+    if test -z "$username"
+        echo "Usage: configure_system <username> <password> [hostname]" >&2
+        return 1
+    end
+    if test -z "$password"
+        echo "Usage: configure_system <username> <password> [hostname]" >&2
+        return 1
+    end
+    if test -z "$hostname"
+        set hostname "$username"
+    end
+    echo "$hostname" > /etc/hostname; or return $status
+    sed -i "s/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen; or return $status
+    locale-gen; or return $status
+    printf "LANG=en_US.UTF-8\n" > /etc/locale.conf; or return $status
+    printf "LC_CTYPE=en_US.UTF-8\n" >> /etc/locale.conf; or return $status
+    useradd -m -G wheel -s /bin/bash "$username"; or return $status
+    echo "root:$password" | chpasswd; or return $status
+    echo "$username:$password" | chpasswd; or return $status
+    echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' >> /etc/sudoers; or return $status
+end
+EOF
+
+RUN fish -ic 'configure_system yun "zaixi"' 
+
+# 安装 yay (AUR 助手)
+RUN su - yun -c "cd /tmp && \
+    git clone https://aur.archlinux.org/yay.git && \
+    cd yay && \
+    makepkg -si --noconfirm" && \
+    rm -rf /tmp/yay
+
+# 使用 yay 安装 AUR 包并配置 fish
+RUN su - yun -c "yay -S --noconfirm fisher-git fastfetch" && \
+    su - yun -c "fish -c 'fisher install jethrokuan/z && fisher install oh-my-fish/theme-bobthefish'" && \
+    chsh -s /usr/bin/fish yun
+
+# 恢复 sudo 需要密码（安全考虑）
+RUN sed -i 's/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
+
+# 配置 SSH
+RUN ssh-keygen -A && \
+    mkdir -p /run/sshd
+
+# 安装 NVIDIA 显卡驱动和相关工具
+# 容器中只需要用户空间工具和库，不需要内核模块
+RUN pacman -Sy --noconfirm && \
+    pacman -S --noconfirm \
+    nvidia-utils \
+    nvidia-settings \
+    opencl-nvidia \
+    cuda \
+    vulkan-tools
+
+# 配置 NVIDIA Container Runtime
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+
+# 暴露 SSH 端口
+EXPOSE 22
+
+# 启动 SSH 服务
+CMD ["/usr/sbin/sshd", "-D"]
