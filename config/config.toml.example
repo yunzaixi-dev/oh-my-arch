@@ -1,0 +1,29 @@
+# Example configuration for customizing users and SSH credentials during the
+# oh-my-arch:base2 image build. Duplicate this file as config.toml and adjust
+# the values before running `docker build`.
+
+[user]
+# Required: non-root username to provision (must already exist in base1 or will
+# be created).
+name = "archuser"
+
+# Required: password for both the configured user and root during the build.
+password = "changeMe!"
+
+# Optional: hostname to assign to the container. Defaults to the username if
+# omitted.
+hostname = "arch-dev"
+
+[ssh]
+# Optional: SSH public key to install into the configured user's
+# ~/.ssh/authorized_keys.
+public_key = "ssh-ed25519 AAAAC3Nz..."  # replace with your real public key
+
+# Optional: SSH private key to store inside the image for convenience. Triple
+# quoted blocks are supported for multi-line keys.
+private_key = """-----BEGIN OPENSSH PRIVATE KEY-----
+REPLACE_WITH_YOUR_PRIVATE_KEY
+-----END OPENSSH PRIVATE KEY-----"""
+
+# Optional: file name for the saved private key (default is id_config).
+private_key_filename = "id_ed25519"

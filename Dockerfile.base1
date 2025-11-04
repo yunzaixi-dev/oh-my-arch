@@ -7,15 +7,32 @@ RUN sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 # 更新包管理器缓存并安装所有系统包（合并以利用缓存）
 RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm \
-    openssh sudo base-devel git go curl fish \
+    openssh sudo base-devel git go curl fish python \
     wqy-microhei wqy-zenhei noto-fonts-cjk \
     adobe-source-han-sans-cn-fonts adobe-source-han-serif-cn-fonts && \
     pacman -Scc --noconfirm
 
 # 系统配置函数（fish 安装后定义并调用）
 RUN mkdir -p /etc/fish/conf.d && \
-    cat <<'EOF' > /etc/fish/conf.d/configure_system.fish
-function configure_system --description 'Configure hostname, locale, and primary user' -a username password hostname
+    cat <<'EOF' > /etc/fish/conf.d/oh-my-arch.fish
+function enable_wheel_passwordless --description 'Allow wheel group to run sudo without password (idempotent)'
+    if grep -q '^%wheel ALL=(ALL:ALL) NOPASSWD: ALL' /etc/sudoers
+        return 0
+    end
+    if grep -q '^%wheel ALL=(ALL:ALL) ALL' /etc/sudoers
+        sed -i 's/^%wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers; or return $status
+    else
+        echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' >> /etc/sudoers; or return $status
+    end
+end
+
+function disable_wheel_passwordless --description 'Require sudo password for wheel group (idempotent)'
+    if grep -q '^%wheel ALL=(ALL:ALL) NOPASSWD: ALL' /etc/sudoers
+        sed -i 's/^%wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers; or return $status
+    end
+end
+
+function configure_system --description 'Configure hostname, locale, root password, and primary user' -a username password hostname
     if test -z "$username"
         echo "Usage: configure_system <username> <password> [hostname]" >&2
         return 1
@@ -28,18 +45,181 @@ function configure_system --description 'Configure hostname, locale, and primary
         set hostname "$username"
     end
     echo "$hostname" > /etc/hostname; or return $status
-    sed -i "s/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen; or return $status
+    if not grep -q '^en_US.UTF-8 UTF-8' /etc/locale.gen
+        sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; or return $status
+    end
     locale-gen; or return $status
     printf "LANG=en_US.UTF-8\n" > /etc/locale.conf; or return $status
     printf "LC_CTYPE=en_US.UTF-8\n" >> /etc/locale.conf; or return $status
-    useradd -m -G wheel -s /bin/bash "$username"; or return $status
+    if id -u "$username" >/dev/null 2>&1
+        usermod -aG wheel -s /bin/bash "$username"; or return $status
+    else
+        useradd -m -G wheel -s /bin/bash "$username"; or return $status
+    end
     echo "root:$password" | chpasswd; or return $status
     echo "$username:$password" | chpasswd; or return $status
-    echo '%wheel ALL=(ALL:ALL) NOPASSWD: ALL' >> /etc/sudoers; or return $status
+end
+
+function configure_ssh_keys --description 'Install SSH public/private keys for user' -a username public_key_b64 private_key_b64 private_key_filename_b64
+    if test -z "$username"
+        echo "Usage: configure_ssh_keys <username> <public_key_b64> <private_key_b64> [private_key_filename_b64]" >&2
+        return 1
+    end
+    set -l passwd_entry (getent passwd "$username")
+    if test -z "$passwd_entry"
+        echo "configure_ssh_keys: user '$username' not found" >&2
+        return 1
+    end
+    set -l home_dir (string split ':' -- $passwd_entry)[6]
+    if test -z "$home_dir"
+        echo "configure_ssh_keys: unable to determine home directory for '$username'" >&2
+        return 1
+    end
+    set -l ssh_dir "$home_dir/.ssh"
+    mkdir -p "$ssh_dir"; or return $status
+    chmod 700 "$ssh_dir"; or return $status
+    chown "$username":"$username" "$ssh_dir"; or return $status
+
+    if test -n "$public_key_b64"
+        printf '%s' "$public_key_b64" | base64 --decode > "$ssh_dir/authorized_keys"; or return $status
+        chmod 600 "$ssh_dir/authorized_keys"; or return $status
+        chown "$username":"$username" "$ssh_dir/authorized_keys"; or return $status
+    end
+
+    if test -n "$private_key_b64"
+        set -l key_filename "id_config"
+        if test -n "$private_key_filename_b64"
+            set key_filename (printf '%s' "$private_key_filename_b64" | base64 --decode | string trim -r --)
+            if test -z "$key_filename"
+                set key_filename "id_config"
+            end
+        end
+        set -l key_path "$ssh_dir/$key_filename"
+        printf '%s' "$private_key_b64" | base64 --decode > "$key_path"; or return $status
+        chmod 600 "$key_path"; or return $status
+        chown "$username":"$username" "$key_path"; or return $status
+    end
+end
+
+function apply_config_from_toml --description 'Apply oh-my-arch configuration from TOML' -a config_path default_username
+    if test -z "$config_path"
+        echo "Usage: apply_config_from_toml <path> [default_username]" >&2
+        return 1
+    end
+    if not test -f "$config_path"
+        echo "apply_config_from_toml: config file '$config_path' not found" >&2
+        return 1
+    end
+
+    set -l parsed (python - "$config_path" <<'PY'
+import base64
+import sys
+
+try:
+    import tomllib
+except ModuleNotFoundError as exc:
+    print(f"toml_parse_error={base64.b64encode(str(exc).encode()).decode()}")
+    sys.exit(1)
+
+def encode(value):
+    if value in (None, ""):
+        return ""
+    if isinstance(value, str):
+        return base64.b64encode(value.encode("utf-8")).decode("ascii")
+    raise SystemExit("Configuration values must be strings")
+
+config_path = sys.argv[1]
+try:
+    with open(config_path, "rb") as fh:
+        data = tomllib.load(fh)
+except Exception as exc:  # noqa: BLE001
+    print(f"toml_parse_error={base64.b64encode(str(exc).encode()).decode()}")
+    sys.exit(1)
+
+user = data.get("user") or {}
+ssh = data.get("ssh") or {}
+
+username = user.get("name")
+password = user.get("password")
+hostname = user.get("hostname", "")
+
+if not username:
+    print("error=user.name is required")
+    sys.exit(1)
+if not password:
+    print("error=user.password is required")
+    sys.exit(1)
+
+print(f"username_b64={encode(username)}")
+print(f"password_b64={encode(password)}")
+print(f"hostname_b64={encode(hostname)}")
+print(f"public_key_b64={encode(ssh.get('public_key'))}")
+print(f"private_key_b64={encode(ssh.get('private_key'))}")
+print(f"private_key_filename_b64={encode(ssh.get('private_key_filename'))}")
+PY
+    ) or return $status
+
+    set -l username_b64 ""
+    set -l password_b64 ""
+    set -l hostname_b64 ""
+    set -l public_key_b64 ""
+    set -l private_key_b64 ""
+    set -l private_key_filename_b64 ""
+
+    for line in $parsed
+        set -l pair (string split -m 1 "=" -- $line)
+        if test (count $pair) -ne 2
+            continue
+        end
+        set -l key $pair[1]
+        set -l value $pair[2]
+        switch $key
+            case "username_b64"
+                set username_b64 $value
+            case "password_b64"
+                set password_b64 $value
+            case "hostname_b64"
+                set hostname_b64 $value
+            case "public_key_b64"
+                set public_key_b64 $value
+            case "private_key_b64"
+                set private_key_b64 $value
+            case "private_key_filename_b64"
+                set private_key_filename_b64 $value
+            case "toml_parse_error"
+                printf '%s\n' (printf '%s' $value | base64 --decode) >&2
+                return 1
+            case "error"
+                printf '%s\n' $value >&2
+                return 1
+        end
+    end
+
+    set -l username (printf '%s' $username_b64 | base64 --decode)
+    set -l password (printf '%s' $password_b64 | base64 --decode)
+    set -l hostname ""
+    if test -n "$hostname_b64"
+        set hostname (printf '%s' $hostname_b64 | base64 --decode)
+    end
+    if test -z "$hostname"
+        set hostname "$username"
+    end
+
+    configure_system "$username" "$password" "$hostname"; or return $status
+    configure_ssh_keys "$username" "$public_key_b64" "$private_key_b64" "$private_key_filename_b64"; or return $status
+
+    if test -n "$default_username" -a "$default_username" != "$username"
+        if id -u "$default_username" >/dev/null 2>&1
+            passwd -l "$default_username" >/dev/null; or return $status
+        end
+    end
 end
 EOF
 
-RUN fish -ic 'configure_system yun "zaixi"' 
+RUN fish -ic 'configure_system yun zaixi'
+
+# 在使用 yay 之前临时允许 wheel 组免密 sudo
+RUN fish -ic 'enable_wheel_passwordless'
 
 # 安装 yay (AUR 助手)
 RUN su - yun -c "cd /tmp && \
@@ -54,7 +234,7 @@ RUN su - yun -c "yay -S --noconfirm fisher-git fastfetch" && \
     chsh -s /usr/bin/fish yun
 
 # 恢复 sudo 需要密码（安全考虑）
-RUN sed -i 's/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
+RUN fish -ic 'disable_wheel_passwordless'
 
 # 配置 SSH
 RUN ssh-keygen -A && \

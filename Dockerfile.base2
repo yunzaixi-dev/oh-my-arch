@@ -1,6 +1,19 @@
 # 基于 base1 镜像
 FROM oh-my-arch:base1
 
+# 复制可选配置（在构建时提供 config/config.toml 即可生效）
+COPY config/ /etc/oh-my-arch/config/
+
+# 如果提供了 config.toml，则应用配置并清理敏感文件
+RUN set -eux; \
+    if [ -f /etc/oh-my-arch/config/config.toml ]; then \
+        fish -ic 'apply_config_from_toml "/etc/oh-my-arch/config/config.toml" "yun"'; \
+        fish -ic 'disable_wheel_passwordless'; \
+        rm -f /etc/oh-my-arch/config/config.toml; \
+    else \
+        echo "No config.toml provided; skipping custom user provisioning."; \
+    fi; \
+    rm -f /etc/oh-my-arch/config/.gitignore
 
 
 # 暴露 SSH 端口
