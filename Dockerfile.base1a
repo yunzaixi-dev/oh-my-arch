@@ -1,6 +1,9 @@
 # 基于已发布的 base1 镜像
 FROM ghcr.io/yunzaixi-dev/oh-my-arch-base1:latest
 
+# 临时开启 wheel 组免密 sudo
+RUN fish -ic 'enable_wheel_passwordless'
+
 # 更新 yay 数据库
 RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
     su - yun -c "yay -Syu --noconfirm --needed"
@@ -36,3 +39,6 @@ RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
     su - yun -c "yay -S --noconfirm --needed ansible-core ansible-lint bind dnsmasq sshpass tcping" && \
     su - yun -c "yay -Sc --noconfirm" && \
     rm -rf /home/yun/.cache/yay/*
+
+# 恢复 sudo 密码策略
+RUN fish -ic 'disable_wheel_passwordless'
