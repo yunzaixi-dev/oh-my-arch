@@ -1,0 +1,38 @@
+# 基于已发布的 base1 镜像
+FROM ghcr.io/yunzaixi-dev/oh-my-arch-base1:latest
+
+# 更新 yay 数据库
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -Syu --noconfirm --needed"
+
+# 使用 yay 安装开发工具与依赖
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed fisher-git fastfetch" && \
+    su - yun -c "fish -c 'fisher install jethrokuan/z && fisher install oh-my-fish/theme-bobthefish'" && \
+    chsh -s /usr/bin/fish yun
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed code-server git git-lfs git-filter-repo github-cli"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed jdk-openjdk jdk17-openjdk jre8-openjdk"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed python-pip python-pipx python-poetry uv"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed python-cookiecutter python-jsonpatch python-kubernetes python-pillow python-playwright python-typer python-typing_extensions python-websockets tk"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed fnm hugo wrangler"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed docker docker-buildx docker-compose docker-credential-pass nvidia-container-toolkit"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed kubectl helm kubeseal k3sup"
+
+RUN --mount=type=cache,target=/home/yun/.cache/yay,uid=1000,gid=1000 \
+    su - yun -c "yay -S --noconfirm --needed ansible-core ansible-lint bind dnsmasq sshpass tcping" && \
+    su - yun -c "yay -Sc --noconfirm" && \
+    rm -rf /home/yun/.cache/yay/*

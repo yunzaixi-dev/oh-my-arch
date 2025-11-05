@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "Dockerfile.base1"
+      - "Dockerfile.base1a"
       - ".github/workflows/build-base1.yml"
       - "config/**"
   workflow_dispatch:
@@ -67,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.base1
+          file: Dockerfile.base1a
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
