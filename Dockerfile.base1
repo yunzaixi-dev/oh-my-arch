@@ -56,7 +56,6 @@ RUN su - yun -c "yay -S --noconfirm --needed \
     jdk-openjdk \
     jdk17-openjdk \
     jre8-openjdk \
-    python311 \
     python-pip \
     python-pipx \
     python-poetry \
