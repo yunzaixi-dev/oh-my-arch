@@ -1,4 +1,4 @@
-.PHONY: build build-base1 build-base2 run stop restart clean ssh ssh-root logs rebuild help
+.PHONY: build build-base1 build-base2 build-base2-latest rebuild-base2 run stop restart clean ssh ssh-root logs rebuild help
 
 # 配置变量
 IMAGE_NAME = oh-my-arch
@@ -14,6 +14,8 @@ help:
 	@echo "  make build       - 链式构建所有 Docker 镜像"
 	@echo "  make build-base1 - 仅构建 base1"
 	@echo "  make build-base2 - 仅构建 base2（需要先构建 base1）"
+	@echo "  make build-base2-latest - 构建 base2 并标记为 latest（需要先构建 base1）"
+	@echo "  make rebuild-base2 - 停止容器，重建 base2 latest，并重新启动"
 	@echo "  make run         - 启动容器（默认启用 GPU 支持）"
 	@echo "  make stop        - 停止容器"
 	@echo "  make restart     - 重启容器"
@@ -32,6 +34,18 @@ build-base1:
 build-base2: build-base1
 	@echo "构建 base2..."
 	docker build -f Dockerfile.base2 -t $(IMAGE_NAME):base2 .
+
+# 构建 base2 并直接标记为 latest（基于已存在的 base1 镜像）
+build-base2-latest:
+	@echo "构建 base2 并标记为 latest..."
+	@if ! docker image inspect $(IMAGE_NAME):base1 >/dev/null 2>&1; then \
+		echo "未找到 $(IMAGE_NAME):base1 镜像，请先执行 make build-base1"; \
+		exit 1; \
+	fi
+	docker build -f Dockerfile.base2 -t $(IMAGE_NAME):latest .
+
+# 停止容器并重建 base2 latest，然后重新启动
+rebuild-base2: stop build-base2-latest run
 
 # 链式构建所有镜像，最后一个标记为 latest
 build: build-base1 build-base2
@@ -63,11 +77,11 @@ rebuild: stop build run
 
 # SSH 连接到容器 (yun 用户，禁用指纹验证)
 ssh:
-	@ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) yun@localhost
+	@ssh -p $(SSH_PORT) yun@localhost
 
 # SSH 连接到容器 (root 用户，禁用指纹验证)
 ssh-root:
-	@ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) root@localhost
+	@ssh -p $(SSH_PORT) root@localhost
 
 # 查看容器日志
 logs:
