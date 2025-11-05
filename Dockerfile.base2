@@ -1,5 +1,5 @@
-# 基于 base1 镜像
-FROM oh-my-arch:base1
+# 基于已发布的 base1 镜像
+FROM ghcr.io/yunzaixi-dev/oh-my-arch-base1:latest
 
 # 复制可选配置（在构建时提供 config/config.toml 即可生效）
 COPY config/ /etc/oh-my-arch/config/
