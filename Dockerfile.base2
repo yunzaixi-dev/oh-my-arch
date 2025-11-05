@@ -3,6 +3,7 @@ FROM oh-my-arch:base1
 
 # 复制可选配置（在构建时提供 config/config.toml 即可生效）
 COPY config/ /etc/oh-my-arch/config/
+COPY scripts/start-services.sh /usr/local/bin/start-services.sh
 
 # 如果提供了 config.toml，则应用配置并清理敏感文件
 RUN set -eux; \
@@ -13,11 +14,13 @@ RUN set -eux; \
     else \
         echo "No config.toml provided; skipping custom user provisioning."; \
     fi; \
-    rm -f /etc/oh-my-arch/config/.gitignore
+    rm -f /etc/oh-my-arch/config/.gitignore; \
+    su - yun -c 'mkdir -p ~/.config/code-server ~/.local/share/code-server'
 
+RUN chmod +x /usr/local/bin/start-services.sh
 
-# 暴露 SSH 端口
-EXPOSE 22
+# 暴露 SSH 和 code-server 端口
+EXPOSE 22 8080
 
-# 启动 SSH 服务
-CMD ["/usr/sbin/sshd", "-D"]
+# 启动 SSH 与 code-server
+CMD ["/usr/local/bin/start-services.sh"]

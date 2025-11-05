@@ -1,6 +1,20 @@
 # 使用 Arch Linux 作为基础镜像
 FROM archlinux:latest
 
+# 安装 NVIDIA 显卡驱动和相关工具
+# 容器中只需要用户空间工具和库，不需要内核模块
+RUN pacman -Sy --noconfirm && \
+    pacman -S --noconfirm \
+    nvidia-utils \
+    nvidia-settings \
+    opencl-nvidia \
+    cuda \
+    vulkan-tools
+
+# 配置 NVIDIA Container Runtime
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+
 # 启用 multilib 仓库（永久支持 32 位库）
 RUN sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
 
@@ -30,10 +44,58 @@ RUN su - yun -c "cd /tmp && \
     makepkg -si --noconfirm" && \
     rm -rf /tmp/yay
 
-# 使用 yay 安装 AUR 包并配置 fish
-RUN su - yun -c "yay -S --noconfirm fisher-git fastfetch" && \
+# 使用 yay 安装开发工具与依赖，并配置 fish
+RUN su - yun -c "yay -S --noconfirm --needed \
+    fisher-git \
+    fastfetch \
+    code-server \
+    git \
+    git-lfs \
+    git-filter-repo \
+    github-cli \
+    jdk-openjdk \
+    jdk17-openjdk \
+    jre8-openjdk \
+    python311 \
+    python-pip \
+    python-pipx \
+    python-poetry \
+    uv \
+    python-cookiecutter \
+    python-jsonpatch \
+    python-kubernetes \
+    python-pillow \
+    python-playwright \
+    python-typer \
+    python-typing_extensions \
+    python-websockets \
+    tk \
+    fnm \
+    hugo \
+    wrangler \
+    docker \
+    docker-buildx \
+    docker-compose \
+    docker-credential-pass \
+    nvidia-container-toolkit \
+    kubectl \
+    helm \
+    kubeseal \
+    k3sup \
+    ansible-core \
+    ansible-lint \
+    bind \
+    dnsmasq \
+    sshpass \
+    tcping" && \
     su - yun -c "fish -c 'fisher install jethrokuan/z && fisher install oh-my-fish/theme-bobthefish'" && \
     chsh -s /usr/bin/fish yun
+
+# 配置全局 fish 设置并立即生效
+COPY fish/config.fish /home/yun/.config/fish/config.fish
+RUN chown -R yun:yun /home/yun/.config/fish
+
+RUN su - yun -c "fish -ic 'if type -q fnm; fnm env | source; end'"
 
 # 恢复 sudo 需要密码（安全考虑）
 RUN fish -ic 'disable_wheel_passwordless'
@@ -41,20 +103,6 @@ RUN fish -ic 'disable_wheel_passwordless'
 # 配置 SSH
 RUN ssh-keygen -A && \
     mkdir -p /run/sshd
-
-# 安装 NVIDIA 显卡驱动和相关工具
-# 容器中只需要用户空间工具和库，不需要内核模块
-RUN pacman -Sy --noconfirm && \
-    pacman -S --noconfirm \
-    nvidia-utils \
-    nvidia-settings \
-    opencl-nvidia \
-    cuda \
-    vulkan-tools
-
-# 配置 NVIDIA Container Runtime
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
 # 暴露 SSH 端口
 EXPOSE 22
