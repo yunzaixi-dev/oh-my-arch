@@ -77,11 +77,11 @@ rebuild: stop build run
 
 # SSH 连接到容器 (yun 用户，禁用指纹验证)
 ssh:
-	@ssh -p $(SSH_PORT) yun@localhost
+	@ssh -o StrictHostKeyChecking=no -p $(SSH_PORT) yun@localhost
 
 # SSH 连接到容器 (root 用户，禁用指纹验证)
 ssh-root:
-	@ssh -p $(SSH_PORT) root@localhost
+	@ssh -o StrictHostKeyChecking=no -p $(SSH_PORT) root@localhost
 
 # 查看容器日志
 logs:
