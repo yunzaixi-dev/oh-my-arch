@@ -14,7 +14,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
-      - ./:/workspace
+      - ./compose-data/workspace:/workspace
       - ./compose-data/code-server/config:/home/yun/.config/code-server
       - ./compose-data/code-server/data:/home/yun/.local/share/code-server
       - ./compose-data/ssh:/home/yun/.ssh
