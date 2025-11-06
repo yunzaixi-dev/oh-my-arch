@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  dev:
+    image: ${OH_MY_ARCH_IMAGE:-oh-my-arch:latest}
+    container_name: oh-my-arch-dev
+    restart: unless-stopped
+    ports:
+      - "2222:22"
+      - "8080:8080"
+    environment:
+      CODE_SERVER_PASSWORD: ${CODE_SERVER_PASSWORD:-yun}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./:/workspace
+      - code-server-config:/home/yun/.config/code-server
+      - code-server-data:/home/yun/.local/share/code-server
+      - ssh-config:/home/yun/.ssh
+      - fnm-store:/home/yun/.local/share/fnm
+      - kube-config:/home/yun/.kube
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    gpus: all
+
+volumes:
+  code-server-config:
+  code-server-data:
+  ssh-config:
+  fnm-store:
+  kube-config:
