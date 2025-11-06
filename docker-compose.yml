@@ -15,18 +15,11 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       - ./:/workspace
-      - code-server-config:/home/yun/.config/code-server
-      - code-server-data:/home/yun/.local/share/code-server
-      - ssh-config:/home/yun/.ssh
-      - fnm-store:/home/yun/.local/share/fnm
-      - kube-config:/home/yun/.kube
+      - ./compose-data/code-server/config:/home/yun/.config/code-server
+      - ./compose-data/code-server/data:/home/yun/.local/share/code-server
+      - ./compose-data/ssh:/home/yun/.ssh
+      - ./compose-data/fnm:/home/yun/.local/share/fnm
+      - ./compose-data/kube:/home/yun/.kube
       - /var/run/docker.sock:/var/run/docker.sock
     working_dir: /workspace
     gpus: all
-
-volumes:
-  code-server-config:
-  code-server-data:
-  ssh-config:
-  fnm-store:
-  kube-config:
